@@ -5,57 +5,25 @@ Script to create randomised workouts
 
 import pandas as pd
 import numpy as np
+from datetime import date
 
 ## load in the exercises file
-sampleExercises = pd.DataFrame(
-    {
-        "Name": [
-            "Push up",
-            "Hindu push ups",
-            "Spiderman push up",
-            "Superman push ups",
-            "Side to side push ups",
-            "Reverse incline push up",
-            "Dips",
-            "Australian bar row",
-            "Squat",
-            "Cossack squat",
-            "Hostages",
-            "Jump lunges",
-            "Vertical jumps",
-            "Switches",
-            "Crunches",
-            "Broncos",
-            "Dead bug",
-            "Leg raises",
-            "Scissors",
-            "Bicycle crunches",
-            "Hybrid bicycle raised crunchees",
-            "Side gorilla",
-            "4 step sequence",
-            "5 step sequence",
-            "3 step drop",
-            "Gorilla sequence",
-            "Bear crawl",
-            "Square pattern", 
-            "Sit thrus",
-            "Kick thrus",
-            "Burpees",
-            "Burpee jump lunge",
-            "Mountain climbers"
-        ]
-    }
-)
+sampleExercises = pd.read_excel("excercises.xlsx")
 
 ## workout parameters
 nExercisesPerSet = 4
 nClustersPerWorkout = 4
 nWorkouts = 12  # 3 workouts a week --> 4 weeks
 
+## some derived parameters
 totalExercises = nExercisesPerSet*nClustersPerWorkout*nWorkouts
 nRepeats = np.ceil(totalExercises/sampleExercises.shape[0])
 
-
+## to avoid repeating the same exercise in a set and to make sure we cover all 
+## available exercises, we shuffle the available exercises nRepeat times and 
+## concatenate them.  
+## this circumvents the R method where there is a constant setdiff comparison
+## however, you can end up with more workouts than originally desired.
 bootstrapExercises = []
 for i in range(int(nRepeats)):
     ## assign a random number then sort
@@ -64,21 +32,30 @@ for i in range(int(nRepeats)):
             .sort_values(by=['rand_num'])
             .assign(bootstrap_idx=i)
     )
-    # sampleExercises['rand_num'] = np.random.uniform(size = sampleExercises.shape[0])
-    # workout = sampleExercises.sort_values(by=['rand_num'], ascending=False)\
-    #     .iloc[0:nExercisesPerSet*nClustersPerWorkout] \
-    #     .assign(set_num=i+1)
-    
-    # workoutsAll.append(workout[["set_num", "Name"]])
 bootstrapExercises = pd.concat(bootstrapExercises)
 
-## concatenate and save to csv
+## Tidy up --> the sets and exercise numbers are simply derived from the row 
+## number
 workoutsAllDf = bootstrapExercises \
     .copy() \
     .assign(row_num=np.arange(bootstrapExercises.shape[0])) 
-workoutsAllDf['set_num']=np.floor(workoutsAllDf['row_num']/16)
+
+## add the set number index
+workoutsAllDf['set_num']=np.floor(workoutsAllDf['row_num']\
+    /nExercisesPerSet\
+    /nClustersPerWorkout)\
+    .astype(int)+1
+
+## add the exercise number 
+workoutsAllDf['exercise_num']=np.floor(workoutsAllDf['row_num']%\
+    (nExercisesPerSet*nClustersPerWorkout))\
+    .astype(int) + 1
 
 ## checks
-workoutsAllDf['Name'].value_counts() ##  is not as evenly distributed as i would have liked
-workoutsAllDf['set_num'].value_counts() ## every set has unique exercises
+workoutsAllDf['Exercise'].value_counts() ##  is not as evenly distributed as i would have liked
+workoutsAllDf['set_num'].value_counts().sort_index() ## every set has unique exercises
 
+## save to file
+fid = 'outputs/' + str(date.today()) + '_workout_output.csv'
+workoutsAllDf[['set_num', 'exercise_num', 'Exercise', 'desc']]\
+    .to_csv(fid, index=False)
